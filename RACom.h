@@ -1,16 +1,17 @@
 //RACom Branch FREERTOS
-#ifndef RACom_H
-#define RACom_H
+#ifndef RACom_H	//tests if RACom_H has not been defined
+#define RACom_H	//define RACom_H
 
-#include "Arduino.h"
-#include "SoftwareSerial.h"
-//#include <NeoSWSerial.h>
+#include "Arduino.h"	//includes the library Arduino.h
+#include "SoftwareSerial.h"	 //Includes the library SoftwareSerial.h
+//#include <NeoSWSerial.h> 
 //#include <limits.h>
 
 /* Kernel includes. */
 #include "Arduino_FreeRTOS.h"
-#include "timers.h"         
-
+#include "timers.h"     
+    
+//an enum with constants
 enum
 {
     BAUND_RATE = 9600,
@@ -24,7 +25,7 @@ enum
     BUFFER_DIM = 60,
     TASK_DELAY = 10
 };
-
+//Define RACom class with relatives methods
 class RACom {
 public:
     void init(byte id, byte number_of_ants);
