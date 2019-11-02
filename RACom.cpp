@@ -1,19 +1,23 @@
 // Branch RAComFreeRTOS
+//Includes Racom.h into this file
 #include "RACom.h"
-static SoftwareSerial MySerial (RX, TX);
+//Initialize serial communication on the pin RX & TX
+static SoftwareSerial MySerial (RX, TX); //RX = 8 & TX = 6
 //static NeoSWSerial MySerial (RX, TX);
 
 static byte initFlag;
-static byte MY_ID;
+static byte MY_ID;	//ID of this ANT
 static byte NUM_ANTS; // Number of ants in the antNet
-static byte currSucc;
-static byte _bufsize;
-static char _buffer[BUFFER_DIM];
+static byte currSucc; //Id of the next ANT
+static byte _bufsize; //Size of the buffer
+static char _buffer[BUFFER_DIM]; //Buffer of chracter <--We have to work on this
 
+//Those are the 2 timer that are used for understand if an ANTS is dead. 
 /* FreeRtos Staff */
 TimerHandle_t xGlobalTimer;
 TimerHandle_t xResponseTimer;
 
+//Condition if a timer expired
 static bool globalTimer_expired;
 static bool responseTimer_expired;
 
@@ -28,8 +32,10 @@ static byte recvPos4[NUM_NEXT_POS] = { 225, 225, 225, 225, 225, 225, 225, 225  }
 static byte recvPos5[NUM_NEXT_POS] = { 225, 225, 225, 225, 225, 225, 225, 225  }; // received next pos from outside ant 5
 
 // Task RGB and motion pointers
+//Handler of two task that will be executed
 TaskHandle_t* taskRGB;
 TaskHandle_t* taskMotion;
+//if a task is resumed or not
 static bool resumedTasks;
 
 static byte startAndStop; // 0 = stop, 1 = start
@@ -41,25 +47,29 @@ static byte currPos3 = 225; // received current pos from outside ant 3
 static byte currPos4 = 225; // received current pos from outside ant 4
 static byte currPos5 = 225; // received current pos from outside ant 5
 
-
+//This is the init method, the first method that has to be called for run the comunication
 void RACom::init(byte id, byte number_of_ants) {
+//Set the data rate for the software serial port
     MySerial.begin(BAUND_RATE);
+//Wait for serial port to connect
     while(!MySerial);
-    
+//print that the serial communication start at the relative BAUND_RATE
     Serial.print(F("Wireless module serial started at "));
     Serial.println(BAUND_RATE);
-
+//Set the pin 13 as output
     pinMode(SET_PIN, OUTPUT); // Connected to set input
-
+//Initialize constants
     MY_ID = id;
     NUM_ANTS = number_of_ants;
     currSucc = MY_ID;
-    
+//Set the buffer's size  
     _bufsize = sizeof _buffer;
-    //_buffer[0] = '\0'; // flush the buffer
+// flush the buffer
+    //_buffer[0] = '\0'; 
+// initialize the buffer adding 0 in all the positions
     memset(_buffer, 0, _bufsize);
 
-    // Start softweare timers
+// Start softweare timers
     initFlag = 0;
     resumedTasks = false;
     globalTimer_expired = false;
@@ -68,16 +78,17 @@ void RACom::init(byte id, byte number_of_ants) {
     myCurrentPosition = 225;
 }
 
+//This method is used for set the 13s pin as HIGH (5V)
 void RACom::comunicationMode() {
   digitalWrite(SET_PIN, HIGH);
   //analogWrite(SET_PIN, 255);
 }
-
+//this method is used for set the 13s pin as LOW (0V)
 void RACom::commandMode() {
   digitalWrite(SET_PIN, LOW);
   //analogWrite(SET_PIN, 0);
 }
-
+//This method is used for test the connection (non viene mai chiamato, perché viene utilizzato solo in ambito di testing)
 void RACom::testCom() {
   if(MySerial.available()) {            // If HC-12 has data
     Serial.write(MySerial.read());      // Send the data to Serial monitor
@@ -86,16 +97,21 @@ void RACom::testCom() {
     MySerial.write(Serial.read());      // Send that data to HC-12
   }
 }
-
+//This method execute all the operation that has to be executed in the broadcastphase
 void RACom::broadcastPhase() {
-  bool isMyTurn;
+//this variable is used for understand if it's my turn or not for communicating 
+ bool isMyTurn;
   do 
   {
     isMyTurn = false;
+//Find the next ANTS which has to communicate
     findMyNext();
+//send information about my status to the next node
     broadcast();
+//This method start the response timer
     startResponseTimer();
     //_buffer[0] = '\0';
+//Initialize the buffer 
     memset(_buffer, 0, _bufsize);
 
     // iterate until response timeout is not expired
@@ -109,7 +125,7 @@ void RACom::broadcastPhase() {
 
       }
     }
-
+//SONO ARRIVATO QUA A COMMENTARE
     if(setRecvPosArray() == MY_ID) {
       currSucc = MY_ID;
       isMyTurn = true;
@@ -125,7 +141,7 @@ void RACom::broadcastPhase() {
   // At the end of brodcast phase, restart the global timer
   startGlobalTimer();
 }
-
+//this is the third and the last method that has to be launched
 void RACom::comAlgo() {
   if(initFlag == 0) {
     MySerial.flush();
@@ -215,7 +231,7 @@ void RACom::findMyNext() {
   
   if(currSucc == MY_ID) currSucc++;
 }
-
+//send information about my status to the next node
 void RACom::broadcast() {
   Serial.print(F("<--- Message Sent: "));
   
@@ -357,7 +373,7 @@ void RACom::startGlobalTimer() {
   globalTimer_expired = false;
   xTimerStart( xGlobalTimer, 0 );
 }
-
+//Starts a timer that is used for take trak of the response
 void RACom::startResponseTimer() {
   Serial.print('\n');
   Serial.println(F("R. timer started"));
