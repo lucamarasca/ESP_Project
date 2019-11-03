@@ -30,7 +30,7 @@ void setup()
   xTaskCreate(task1, "task1", 128, NULL, 1, NULL);
 //Start the scheduler --> run the task with highest priority
   vTaskStartScheduler();
-//not stop the execution
+//not stop the execution for doing something else
   for (;;);
 }
 

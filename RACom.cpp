@@ -69,10 +69,10 @@ void RACom::init(byte id, byte number_of_ants) {
 // initialize the buffer adding 0 in all the positions
     memset(_buffer, 0, _bufsize);
 
-// Start softweare timers
-    initFlag = 0;
+// Start software timers
+    initFlag = 0;	//This flag is used for understand if an has been initialized or not
     resumedTasks = false;
-    globalTimer_expired = false;
+    globalTimer_expired = false;	//if global timer expired or not
     responseTimer_expired = false;
     startAndStop = 1;
     myCurrentPosition = 225;
@@ -88,7 +88,7 @@ void RACom::commandMode() {
   digitalWrite(SET_PIN, LOW);
   //analogWrite(SET_PIN, 0);
 }
-//This method is used for test the connection (non viene mai chiamato, perché viene utilizzato solo in ambito di testing)
+//This method is used for test the connection (non viene mai chiamato, perche viene utilizzato solo in ambito di testing)
 void RACom::testCom() {
   if(MySerial.available()) {            // If HC-12 has data
     Serial.write(MySerial.read());      // Send the data to Serial monitor
@@ -116,8 +116,9 @@ void RACom::broadcastPhase() {
 
     // iterate until response timeout is not expired
     while( !responseTimer_expired ) {
+		//if port 13 is avaiable
       if(MySerial.available()) {
-        
+        //if i read a @, than i'll read until $ or until he reach buffsize and it put inside the buffer the data's 
         if((char)MySerial.read() == '@') {
           MySerial.readBytesUntil('$', _buffer, _bufsize);
           break;
@@ -125,13 +126,14 @@ void RACom::broadcastPhase() {
 
       }
     }
-//SONO ARRIVATO QUA A COMMENTARE
+	//if it's my turn
     if(setRecvPosArray() == MY_ID) {
       currSucc = MY_ID;
       isMyTurn = true;
     } 
-
+	//block the task for 10
     vTaskDelay( TASK_DELAY );
+	//Print the message recived
     Serial.print(F("<--- Message received after broadcast: "));
     Serial.println(_buffer);
     
@@ -153,13 +155,14 @@ void RACom::comAlgo() {
   if(!globalTimer_expired) {
     // Read phase
     if(MySerial.available()) {
-
+		//If i read the start symbol
       if((char)MySerial.read() == '@') {
+		  //read the content trasmitted until i reach $ or length
         MySerial.readBytesUntil('$', _buffer, _bufsize);
-        
+        //print the message recived
         Serial.print(F("<--- Message received: "));
         Serial.println(_buffer);
-
+		//start the broadcast phase
         if(setRecvPosArray() == MY_ID) {
           currSucc = MY_ID;
           broadcastPhase();
@@ -173,19 +176,20 @@ void RACom::comAlgo() {
   }
   else {
     // I'm the only one in the network
+	// if there's only one ant
     broadcastPhase();
   }
-
+	//apply delay of 10
   vTaskDelay( TASK_DELAY ); 
   
 }
-
+//not getting called
 void RACom::setNextPosArray(byte replace[]) {
   for(int i = 0; i < NUM_NEXT_POS; i++) {
     nextPositions[i] = replace[i];
   }
 }
-
+//not getting called
 byte* RACom::getRecvPosArray(byte num_ant) {
   if(num_ant == 1) return recvPos1;
   if(num_ant == 2) return recvPos2;
@@ -193,24 +197,24 @@ byte* RACom::getRecvPosArray(byte num_ant) {
   if(num_ant == 4) return recvPos4;
   if(num_ant == 5) return recvPos5;
 }
-
+//Set the handle of the tasks
 void RACom::setTaskHandle(TaskHandle_t* xHandleRGB, TaskHandle_t* xHandleMotion) {
   taskRGB = xHandleRGB;
   taskMotion = xHandleMotion;
 }
-
+//Set the startandstop state
 void RACom::setStartAndStop(byte state) {
   startAndStop = state;
 }
-
+//get the start and stop state
 byte RACom::getStartAndStop() {
   return startAndStop;
 }
-
+//Set my current position 
 void RACom::setMyCurrentPosition(byte pos) {
   myCurrentPosition = pos;
 }
-
+//get the position of the five ants 
 byte RACom::getCurrentPosOfAnt(byte num_ant) {
   if(num_ant == 1) return currPos1;
   if(num_ant == 2) return currPos2;
@@ -218,7 +222,7 @@ byte RACom::getCurrentPosOfAnt(byte num_ant) {
   if(num_ant == 4) return currPos4;
   if(num_ant == 5) return currPos5;
 }
-
+//Find the next node that has to be called 
 void RACom::findMyNext() {
   currSucc++;
 
@@ -271,18 +275,20 @@ void RACom::broadcast() {
   MySerial.print('$'); // end char
 
 }
-
+//this method is used for store the message recived
 int RACom::setRecvPosArray() {
+	
   if( strlen(_buffer) != 0  ) {
-    int mit;
-    int ss;
-    int succ;
-
+	  
+    int mit;	//ID
+    int ss;		//start-stop
+    int succ;	//Id of the next node
+	//copy inside an array fo character, the content of the buffer
     char copy[BUFFER_DIM];
     size_t len = sizeof(copy);
     strncpy(copy, _buffer, len);
     copy[len-1] = '\0';
-
+	//divide the string into a series of token , suing the delimitator #
     char * pch = strtok(copy, "#");
     int i = 0;
     
@@ -291,14 +297,17 @@ int RACom::setRecvPosArray() {
       // @ mit # succ # next_pos # next_pos # next_pos # next_pos # next_pos # next_pos # next_pos # next_pos # start_stop # current_pos $
 
       if(i == 0) {
+		  //convert pch in int
         mit = atoi(pch);
       }
 
       if(i == 1) {
+		  //put into succ the id of the next node
         succ = atoi(pch);
       }
 
       if(i >= 2 && i <= 9) {
+		  //put inside recvpos the tokens
         if(mit == 1) recvPos1[i - 2] = (byte) atoi(pch);
         if(mit == 2) recvPos2[i - 2] = (byte) atoi(pch);
         if(mit == 3) recvPos3[i - 2] = (byte) atoi(pch);
@@ -307,6 +316,7 @@ int RACom::setRecvPosArray() {
       }
 
       if(i == 10 && mit == SPECIAL_ANT_ID) {
+		//put inside ss start and stop condition
         ss = atoi(pch);
         
         if(ss == 0) {
@@ -328,20 +338,21 @@ int RACom::setRecvPosArray() {
       pch = strtok (NULL, "#");
       i++;
     }
-
+	//return the id of the next ANT
     return succ;
 
   } else {
     return NUM_ANTS + 1; // not existing ANT
   }
 } 
-
+//not getting called
 void RACom::resetNextPosArray() {
   for(int i = 0; i < NUM_NEXT_POS; i++) {
     nextPositions[i] = 225;
   }
 }
 
+//this method never gets called
 void RACom::setupTimers() {
   Serial.println(F("Setup timers"));
 
@@ -367,10 +378,12 @@ void RACom::setupTimers() {
   }
 }
 
+//This method is used for starting the global timer 
 void RACom::startGlobalTimer() {
   Serial.print('\n');
   Serial.println(F("G. timer started"));
   globalTimer_expired = false;
+  //Starts the global timer (which timer, how many time has to wait)
   xTimerStart( xGlobalTimer, 0 );
 }
 //Starts a timer that is used for take trak of the response
@@ -380,7 +393,7 @@ void RACom::startResponseTimer() {
   responseTimer_expired = false;
   xTimerStart( xResponseTimer, 0 );
 }
-
+//when we have a callback to the global timer that means that it has expired
 void RACom::globalTimerCallback( TimerHandle_t xTimer ) {
   Serial.print('\n');
   Serial.println(F("Global Timer Expired"));
@@ -392,7 +405,7 @@ void RACom::globalTimerCallback( TimerHandle_t xTimer ) {
   }
   globalTimer_expired = true;
 }
-
+//when we have a callback to the reponse timer that means that it has expired
 void RACom::responseTimerCallback( TimerHandle_t xTimer ) {
   Serial.print('\n');
   Serial.println(F("Response Timer Expired"));

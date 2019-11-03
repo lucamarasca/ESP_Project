@@ -14,7 +14,9 @@
 //an enum with constants
 enum
 {
+	//rate of trnsmission
     BAUND_RATE = 9600,
+	//pin used
     RX = 8,
     TX = 6,
     SET_PIN = 13,
@@ -23,6 +25,7 @@ enum
     NUM_NEXT_POS = 8,
     SPECIAL_ANT_ID = 3,
     BUFFER_DIM = 60,
+	//delay applied to a task
     TASK_DELAY = 10
 };
 //Define RACom class with relatives methods
