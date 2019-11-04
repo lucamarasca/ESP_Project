@@ -40,6 +40,7 @@ static bool resumedTasks;
 
 static byte startAndStop; // 0 = stop, 1 = start
 static byte myCurrentPosition; // my current pos to brodcast
+static byte antMode; //Command to select ant mode; 0 = default random mode
 
 static byte currPos1 = 225; // received current pos from outside ant 1
 static byte currPos2 = 225; // received current pos from outside ant 2
@@ -75,6 +76,7 @@ void RACom::init(byte id, byte number_of_ants) {
     globalTimer_expired = false;	//if global timer expired or not
     responseTimer_expired = false;
     startAndStop = 1;
+    antMode = 0;
     myCurrentPosition = 225;
 }
 
@@ -210,6 +212,17 @@ void RACom::setStartAndStop(byte state) {
 byte RACom::getStartAndStop() {
   return startAndStop;
 }
+
+//set the antMode state
+void RACom::setAntMode(byte mode) {
+  antMode = mode;
+}
+
+//get the antMode state
+byte RACom::getAntMode() {
+  return antMode;
+}
+
 //Set my current position 
 void RACom::setMyCurrentPosition(byte pos) {
   myCurrentPosition = pos;
@@ -269,6 +282,12 @@ void RACom::broadcast() {
   MySerial.print('#'); // separator
   Serial.print('#');
 
+  MySerial.print(antMode); // ant Mode
+  Serial.print(antMode);
+
+  MySerial.print('#'); // separator
+  Serial.print('#');
+
   MySerial.print(myCurrentPosition); // current position
   Serial.print(myCurrentPosition);
 
@@ -293,8 +312,8 @@ int RACom::setRecvPosArray() {
     int i = 0;
     
     while (pch != NULL) {
-      // Frame example: @1#2#225#225#225#225#225#225#225#225#1#225$
-      // @ mit # succ # next_pos # next_pos # next_pos # next_pos # next_pos # next_pos # next_pos # next_pos # start_stop # current_pos $
+      // Frame example: @1#2#225#225#225#225#225#225#225#225#1#0#225$
+      // @ mit # succ # next_pos # next_pos # next_pos # next_pos # next_pos # next_pos # next_pos # next_pos # start_stop # antMode # current_pos $
 
       if(i == 0) {
 		  //convert pch in int
@@ -327,7 +346,12 @@ int RACom::setRecvPosArray() {
         }
       }
 
-      if(i == 11) {
+       if(i == 11 && mit == SPECIAL_ANT_ID) {
+        mode = atoi(pch);
+        antMode = (byte) mode;      
+      }
+
+      if(i == 12) {
         if(mit == 1) currPos1 = (byte) atoi(pch);
         if(mit == 2) currPos2 = (byte) atoi(pch);
         if(mit == 3) currPos3 = (byte) atoi(pch);
