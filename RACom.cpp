@@ -11,7 +11,8 @@ static byte NUM_ANTS; // Number of ants in the antNet
 static byte currSucc; //Id of the next ANT
 static byte _bufsize; //Size of the buffer
 static char _buffer[BUFFER_DIM]; //Buffer of chracter <--We have to work on this
-
+static byte ID_LIST[20];
+static byte ID_LIST_SIZE;
 //Those are the 2 timer that are used for understand if an ANTS is dead. 
 /* FreeRtos Staff */
 TimerHandle_t xGlobalTimer;
@@ -49,7 +50,7 @@ static byte currPos4 = 225; // received current pos from outside ant 4
 static byte currPos5 = 225; // received current pos from outside ant 5
 
 //This is the init method, the first method that has to be called for run the comunication
-void RACom::init(byte id, byte number_of_ants) {
+void RACom::init(byte id) {
 //Set the data rate for the software serial port
     MySerial.begin(BAUND_RATE);
 //Wait for serial port to connect
@@ -61,7 +62,8 @@ void RACom::init(byte id, byte number_of_ants) {
     pinMode(SET_PIN, OUTPUT); // Connected to set input
 //Initialize constants
     MY_ID = id;
-    NUM_ANTS = number_of_ants;
+	ID_LIST_SIZE = 0;
+    hello();
     currSucc = MY_ID;
 //Set the buffer's size  
     _bufsize = sizeof _buffer;
@@ -79,7 +81,50 @@ void RACom::init(byte id, byte number_of_ants) {
     antMode = 0;
     myCurrentPosition = 225;
 }
+//Set my current position 
+void RACom::Hello() {
+  Serial.print(F("<--- Hello Message Sent: "));
+  
+  // Wireless send
+  MySerial.print('HELLO'); // start char
+  MySerial.print('#'); // separator
+  Serial.print('#');
+  MySerial.print(MY_ID); // mit
+  Serial.print(MY_ID);
+  HelloRecive();
+  
+}
+void RACom::HelloRecive() {
+  if(MySerial.available()) {
+		//If i read the start symbol
+      if((char)MySerial.read() == 'HELLOANSWER') {
+		  //read the content trasmitted until i reach $ or length
+        MySerial.readBytesUntil('$', _buffer, _bufsize);
+        //print the message recived
+        Serial.print(F("<--- Message received: "));
+        Serial.println(_buffer);
+		//Metto i valori ricevuti nelle costanti e svuoto il buffer
+        NUM_ANTS=atol(_buffer[2]);
+		ID_LIST[ID_LIST_SIZE] = atol(_buffer[4]);
+		ID_LIST_SIZE++;
+        //_buffer[0] = '\0';
+        memset(_buffer, 0, _bufsize);
+      }
 
+    }
+  
+}
+void RACom::HelloResponse() {
+	MySerial.print('HELLOANSWER'); // start char
+	MySerial.print('#'); // separator
+	Serial.print('#');
+	MySerial.print(MY_ID); // mit
+	Serial.print(MY_ID);
+	MySerial.print('#'); // separator
+	Serial.print('#');
+	MySerial.print(NUM_ANTS); // mit
+	Serial.print(NUM_ANTS);
+}
 //This method is used for set the 13s pin as HIGH (5V)
 void RACom::comunicationMode() {
   digitalWrite(SET_PIN, HIGH);
@@ -173,7 +218,11 @@ void RACom::comAlgo() {
         //_buffer[0] = '\0';
         memset(_buffer, 0, _bufsize);
       }
-
+	//If i read the start symbol
+      if((char)MySerial.read() == 'HELLO') {
+		  NUM_ANTS++;
+		 HelloResponse();
+      }
     }
   }
   else {
@@ -236,17 +285,33 @@ byte RACom::getCurrentPosOfAnt(byte num_ant) {
   if(num_ant == 5) return currPos5;
 }
 //Find the next node that has to be called 
+//L'ho commentato perché e sbagliato
+/*
 void RACom::findMyNext() {
-  currSucc++;
+	
+		currSucc++;
 
-  if(NUM_ANTS == 2 || MY_ID == NUM_ANTS) {
-    if(currSucc >= NUM_ANTS) currSucc = 1; 
-  }
-  else {
-    if(currSucc > NUM_ANTS) currSucc = 1; 
-  }
-  
-  if(currSucc == MY_ID) currSucc++;
+	  if(NUM_ANTS == 2 || MY_ID == NUM_ANTS) {
+		  //Significa che sono l'ultimo
+		if(currSucc >= NUM_ANTS) currSucc = 0; 
+	  }
+	  else {
+		if(currSucc > NUM_ANTS) currSucc = 1; 
+	  }
+	  
+	  if(currSucc == MY_ID) currSucc++;
+	
+	
+}
+*/
+void RACom::findMyNext() {
+	currSucc = 99;
+	for(int i = 0; i < ID_LIST_SIZE; i++){
+		if (MY_ID < ID_LIST[i] && currSucc > ID_LIST)
+			currSucc = ID_LIST[i];
+	}
+	
+	
 }
 //send information about my status to the next node
 void RACom::broadcast() {
