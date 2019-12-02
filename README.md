@@ -4,7 +4,7 @@
 //Declaration of a variabile RACom type
 RACom wireless;
 //Create a task that execute while(true) the method comAlgo();
-void task1()
+void task1(void *pvParameters)
 {
   for (;;) {
     wireless.comAlgo(); 
@@ -26,6 +26,7 @@ void setup()
   wireless.init(1, 3); // First param: id of ANT, Second param: number of ANTS
 //Defined into RACom.h and done in RACom.cpp
   wireless.comunicationMode();
+  wireless.setupTimers(); //?
 //Create an instance of the task with this parameters: pointer of the task, name of the task, stack size, parameter passed, priority, handle
   xTaskCreate(task1, "task1", 128, NULL, 1, NULL);
 //Start the scheduler --> run the task with highest priority
