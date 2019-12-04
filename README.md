@@ -37,6 +37,9 @@ void setup()
 
 void loop()
 {
-
+// Hooked to IDle task, it will run whenever CPU is idle
+//configUSE_IDLE_HOOK should be set to 1
+  Serial.println(F("Idle Task"));
+  delay(50);
 }
 ```
