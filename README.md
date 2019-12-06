@@ -3,11 +3,15 @@
 ```
 //Declaration of a variabile RACom type
 RACom wireless;
+// unsigned long ulIdleCycleCount = 0UL; //Idle task Counter
+
 //Create a task that execute while(true) the method comAlgo();
 void task1(void *pvParameters)
 {
   for (;;) {
     wireless.comAlgo(); 
+    //Serial.println(+ulIdleCycleCount);
+    //vTaskDelay(250 / portTICK_PERIOD_MS);
   }
 }
 
@@ -35,11 +39,17 @@ void setup()
   for (;;);
 }
 
+void vApplicationIdleHook ( void ) {
+  Serial.print(F("Idle"));
+  Serial.println(xTaskGetTickCount());
+}
+
+//Metodo2
+/* void vApplicationIdleHookProva ( void ) {
+  ulIdleCycleCount ++;  
+}/*
+
 void loop()
 {
-// Hooked to IDle task, it will run whenever CPU is idle
-//configUSE_IDLE_HOOK should be set to 1
-  Serial.println(F("Idle Task"));
-  delay(50);
 }
 ```
