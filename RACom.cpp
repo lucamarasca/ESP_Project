@@ -63,7 +63,7 @@ void RACom::init(byte id) {
 //Initialize constants
     MY_ID = id;
 	ID_LIST_SIZE = 0;
-    hello();
+    Hello();
     currSucc = MY_ID;
 //Set the buffer's size  
     _bufsize = sizeof _buffer;
@@ -363,7 +363,7 @@ void RACom::broadcast() {
 int RACom::setRecvPosArray() {
 	
   if( strlen(_buffer) != 0  ) {
-	  
+	byte mode; 
     int mit;	//ID
     int ss;		//start-stop
     int succ;	//Id of the next node

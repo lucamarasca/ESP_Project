@@ -31,7 +31,7 @@ enum
 //Define RACom class with relatives methods
 class RACom {
 public:
-    void init(byte id, byte number_of_ants);
+    void init(byte id);
     void comunicationMode();
     void commandMode();
     void testCom();
@@ -46,6 +46,9 @@ public:
     byte getAntMode();
     void setMyCurrentPosition(byte pos);
     byte getCurrentPosOfAnt(byte num_ant);
+	void Hello();
+	void HelloRecive();
+	void HelloResponse();
 
 private:
     // methods for comAlgo
