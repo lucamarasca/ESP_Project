@@ -8,7 +8,7 @@
   Skriniar -> 2
   Milova -> 3
 */
-#define ANT_ID 2
+#define ANT_ID 3
 #define ANT_TOT 3
 //RGB PIN
 #define s0 2
@@ -561,7 +561,7 @@ void vApplicationIdleHook(void) {
 void setup() {
   Serial.begin(9600);
 
-  wireless.init(ANT_ID, ANT_TOT);
+  wireless.init(ANT_ID);
   wireless.comunicationMode();
   wireless.setupTimers();
 
