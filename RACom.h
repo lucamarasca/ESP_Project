@@ -46,8 +46,10 @@ public:
     byte getAntMode();
     void setMyCurrentPosition(byte pos);
     byte getCurrentPosOfAnt(byte num_ant);
+	
 	void Hello();
-	void HelloRecive();
+	void HelloWait();
+	void HelloRecieve();	
 	void HelloResponse();
 
 private:

@@ -2,12 +2,13 @@
 //Includes Racom.h into this file
 #include "RACom.h"
 //Initialize serial communication on the pin RX & TX
-static SoftwareSerial MySerial (RX, TX); //RX = 8 & TX = 6
+//static SoftwareSerial MySerial (RX, TX); //RX = 8 & TX = 6
+static SoftwareSerial MySerial (TX, RX);
 //static NeoSWSerial MySerial (RX, TX);
 
 static byte initFlag;
 static byte MY_ID;	//ID of this ANT
-static byte NUM_ANTS; // Number of ants in the antNet
+static byte NUM_ANTS = 1; // Number of ants in the antNet (Init = 1 for the master)
 static byte currSucc; //Id of the next ANT
 static byte _bufsize; //Size of the buffer
 static char _buffer[BUFFER_DIM]; //Buffer of chracter <--We have to work on this
@@ -38,6 +39,7 @@ TaskHandle_t* taskRGB;
 TaskHandle_t* taskMotion;
 //if a task is resumed or not
 static bool resumedTasks;
+static bool flagHello;
 
 static byte startAndStop; // 0 = stop, 1 = start
 static byte myCurrentPosition; // my current pos to brodcast
@@ -63,7 +65,7 @@ void RACom::init(byte id) {
 //Initialize constants
     MY_ID = id;
 	ID_LIST_SIZE = 0;
-    Hello();
+	flagHello = false;
     currSucc = MY_ID;
 //Set the buffer's size  
     _bufsize = sizeof _buffer;
@@ -82,26 +84,62 @@ void RACom::init(byte id) {
     myCurrentPosition = 225;
 }
 //Set my current position 
+
+
+//Send the hello message
 void RACom::Hello() {
   Serial.print(F("<--- Hello Message Sent: "));
-  
-  // Wireless send
-  MySerial.print('HELLO'); // start char
+    // Wireless send
+  MySerial.print('H'); // start char hello
+  Serial.print('H'); // start char hello
   MySerial.print('#'); // separator
   Serial.print('#');
   MySerial.print(MY_ID); // mit
   Serial.print(MY_ID);
-  HelloRecive();
-  
+  MySerial.print('$'); // end char
+  HelloRecieve();  
 }
-void RACom::HelloRecive() {
-  if(MySerial.available()) {
-		//If i read the start symbol
-      if((char)MySerial.read() == 'HELLOANSWER') {
-		  //read the content trasmitted until i reach $ or length
+
+//Receive the hello message
+void RACom::HelloWait() {
+	
+//If I read the Hello Message
+  if((char)MySerial.read() == 'H') {
+	MySerial.readBytesUntil('$', _buffer, _bufsize);
+	 int mit;	//ID
+	 char copy[2]; //2 is hello message length
+   	 strncpy(copy, _buffer, 2);
+	 
+	 //split string into tokens , suing the delimitator # and retrieve mit
+        char * pch = strtok(copy, "#");
+        mit = atoi(pch);    
+		byte mitb = mit;		
+
+      //Check that ID of ant has not already been added to ID_List
+      if (ID_LIST[mit] == 0)	  {
+	     //Add id in id-th position
+	     ID_LIST[mit] = mitb;
+	     NUM_ANTS++;		
+	       			
+	      Serial.println(F("HELLO Message received from ANT: "));
+	       Serial.println(mit);
+	        HelloResponse();
+	    }   
+	 
+    }
+
+}
+
+
+
+//Receive the Ack of Hello Message
+void RACom::HelloRecieve() {
+	//If i read the start symbol
+      if((char)MySerial.read() == 'A') { //hello answer
+		//read the content trasmitted until i reach $ or length
         MySerial.readBytesUntil('$', _buffer, _bufsize);
+        Serial.println(F("ACK received: "));
         //print the message recived
-        Serial.print(F("<--- Message received: "));
         Serial.println(_buffer);
 		//Metto i valori ricevuti nelle costanti e svuoto il buffer
         NUM_ANTS=atol(_buffer[2]);
@@ -109,21 +147,25 @@ void RACom::HelloRecive() {
 		ID_LIST_SIZE++;
         //_buffer[0] = '\0';
         memset(_buffer, 0, _bufsize);
+		flagHello = true; //Stop sending hello messages
       }
-
-    }
-  
+     
 }
+
+//Send Ack for Hello Message
 void RACom::HelloResponse() {
-	MySerial.print('HELLOANSWER'); // start char
+	Serial.println("Ack Sent: ");
+	MySerial.print('A'); // start char helloanswer
+	Serial.print('A');
 	MySerial.print('#'); // separator
 	Serial.print('#');
 	MySerial.print(MY_ID); // mit
 	Serial.print(MY_ID);
 	MySerial.print('#'); // separator
 	Serial.print('#');
-	MySerial.print(NUM_ANTS); // mit
+	MySerial.print(NUM_ANTS); // number of ants
 	Serial.print(NUM_ANTS);
+	MySerial.print('$'); // end char
 }
 //This method is used for set the 13s pin as HIGH (5V)
 void RACom::comunicationMode() {
@@ -170,7 +212,7 @@ void RACom::broadcastPhase() {
           MySerial.readBytesUntil('$', _buffer, _bufsize);
           break;
         }
-
+   
       }
     }
 	//if it's my turn
@@ -198,6 +240,16 @@ void RACom::comAlgo() {
     initFlag = 1;
   }
   
+  //If I am not the master, and if I haven't received a response to my Hello
+  if(MY_ID != SPECIAL_ANT_ID && flagHello == false){
+		  Hello();
+	} 
+  
+  //Receive hello message
+  HelloWait();
+	  
+	   
+	  
   // Global timeout
   if(!globalTimer_expired) {
     // Read phase
@@ -218,12 +270,8 @@ void RACom::comAlgo() {
         //_buffer[0] = '\0';
         memset(_buffer, 0, _bufsize);
       }
-	//If i read the start symbol
-      if((char)MySerial.read() == 'HELLO') {
-		  NUM_ANTS++;
-		 HelloResponse();
-      }
-    }
+	
+    }	
   }
   else {
     // I'm the only one in the network
@@ -285,7 +333,7 @@ byte RACom::getCurrentPosOfAnt(byte num_ant) {
   if(num_ant == 5) return currPos5;
 }
 //Find the next node that has to be called 
-//L'ho commentato perché e sbagliato
+//L'ho commentato perchï¿½ e sbagliato
 /*
 void RACom::findMyNext() {
 	
