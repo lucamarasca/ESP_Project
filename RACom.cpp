@@ -12,8 +12,9 @@ static byte NUM_ANTS = 1; // Number of ants in the antNet (Init = 1 for the mast
 static byte currSucc; //Id of the next ANT
 static byte _bufsize; //Size of the buffer
 static char _buffer[BUFFER_DIM]; //Buffer of chracter <--We have to work on this
-static byte ID_LIST[20];
-static byte ID_LIST_SIZE;
+static byte ID_LIST_SIZE = 20;
+static byte ID_LIST[ID_LIST_SIZE];
+
 //Those are the 2 timer that are used for understand if an ANTS is dead. 
 /* FreeRtos Staff */
 TimerHandle_t xGlobalTimer;
@@ -123,7 +124,7 @@ void RACom::HelloWait() {
 	       			
 	      Serial.println(F("HELLO Message received from ANT: "));
 	       Serial.println(mit);
-	        HelloResponse();
+	        HelloResponse(mit);
 	    }   
 	 
     }
@@ -133,34 +134,78 @@ void RACom::HelloWait() {
 
 
 //Receive the Ack of Hello Message
+//Ant has been accepted into the network.
+//Ant must receive list of current members of the network.
 void RACom::HelloRecieve() {
 	//If i read the start symbol
       if((char)MySerial.read() == 'A') { //hello answer
-		//read the content trasmitted until i reach $ or length
-        MySerial.readBytesUntil('$', _buffer, _bufsize);
-        Serial.println(F("ACK received: "));
-        //print the message recived
-        Serial.println(_buffer);
-		//Metto i valori ricevuti nelle costanti e svuoto il buffer
-        NUM_ANTS=atol(_buffer[2]);
-		ID_LIST[ID_LIST_SIZE] = atol(_buffer[4]);
-		ID_LIST_SIZE++;
-        //_buffer[0] = '\0';
-        memset(_buffer, 0, _bufsize);
-		flagHello = true; //Stop sending hello messages
+	    int mit; //ack mit
+		int dest; //ack dest
+		int nants; //ack number of ants
+		
+	   //Parse message to check if I'm the dest
+	    MySerial.readBytesUntil('$', _buffer, _bufsize);
+		size_t bufsize = sizeof(_buffer);
+		char copy[bufsize];
+        strncpy(copy, _buffer, bufsize);
+        copy[bufsize-1] = '\0';
+	     //divide the string into a series of token , suing the delimitator #
+         char * pch = strtok(copy, "#");
+         int i = 0;
+		 
+		  while (pch != NULL) {
+      // Frame example: mit#dest#n_ant
+
+        if(i == 0) {
+	    	  //convert pch in int
+         mit = atoi(pch);
+		 Serial.println("MIT OF ACK");
+         Serial.println(mit);
+        }
+
+      if(i == 1) {
+		  //put into succ the id of the next node
+        dest = atoi(pch);
+		Serial.println("DEST OF ACK");
+        Serial.println(dest);
+      }
+
+      if(i == 2) {
+		 nants = atoi(pch);
+		 Serial.println("NUMBER OF ANTS OF ACK");
+         Serial.println(nants);
+      }
+      pch = strtok (NULL, "#");
+      i++;
+    }
+	//If ack is for me
+		if(dest == MY_ID){
+	     Serial.println(F("ACK received: "));
+         //print the message recived
+         Serial.print(_buffer);
+		 //Metto i valori ricevuti nelle costanti e svuoto il buffer
+         NUM_ANTS = nants;
+		 //ID_LIST[ID_LIST_SIZE] = atol(_buffer[4]);
+		 //ID_LIST_SIZE++;
+         //_buffer[0] = '\0';
+         memset(_buffer, 0, _bufsize);
+		 flagHello = true; //Stop sending hello messages
+		}  
       }
      
 }
 
 //Send Ack for Hello Message
-void RACom::HelloResponse() {
+void RACom::HelloResponse(int dest) {
 	Serial.println("Ack Sent: ");
 	MySerial.print('A'); // start char helloanswer
 	Serial.print('A');
-	MySerial.print('#'); // separator
-	Serial.print('#');
 	MySerial.print(MY_ID); // mit
 	Serial.print(MY_ID);
+	MySerial.print('#'); // separator
+	Serial.print('#');
+	MySerial.print(dest); // dest of ack (ant that sent hello)
+    Serial.print(dest);
 	MySerial.print('#'); // separator
 	Serial.print('#');
 	MySerial.print(NUM_ANTS); // number of ants
@@ -489,7 +534,6 @@ void RACom::resetNextPosArray() {
   }
 }
 
-//this method never gets called
 void RACom::setupTimers() {
   Serial.println(F("Setup timers"));
 
