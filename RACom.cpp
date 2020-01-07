@@ -12,7 +12,6 @@ static byte NUM_ANTS = 1; // Number of ants in the antNet (Init = 1 for the mast
 static byte currSucc; //Id of the next ANT
 static byte _bufsize; //Size of the buffer
 static char _buffer[BUFFER_DIM]; //Buffer of chracter <--We have to work on this
-static byte ID_LIST_SIZE = 20;
 static byte ID_LIST[ID_LIST_SIZE];
 
 //Those are the 2 timer that are used for understand if an ANTS is dead. 
@@ -65,7 +64,8 @@ void RACom::init(byte id) {
     pinMode(SET_PIN, OUTPUT); // Connected to set input
 //Initialize constants
     MY_ID = id;
-	ID_LIST_SIZE = 0;
+//Add myself to ant list
+ID_LIST[id-1] = id;
 	flagHello = false;
     currSucc = MY_ID;
 //Set the buffer's size  
@@ -98,7 +98,7 @@ void RACom::Hello() {
   MySerial.print(MY_ID); // mit
   Serial.print(MY_ID);
   MySerial.print('$'); // end char
-  HelloRecieve();  
+  AckWait();  
 }
 
 //Receive the hello message
@@ -117,26 +117,23 @@ void RACom::HelloWait() {
 		byte mitb = mit;		
 
       //Check that ID of ant has not already been added to ID_List
-      if (ID_LIST[mit] == 0)	  {
-	     //Add id in id-th position
-	     ID_LIST[mit] = mitb;
+      if (ID_LIST[mit - 1] == 0)	  {
+	     //Add id in id-th - 1 position
+	     ID_LIST[mit - 1] = mitb;
 	     NUM_ANTS++;		
-	       			
+	      	
 	      Serial.println(F("HELLO Message received from ANT: "));
-	       Serial.println(mit);
-	        HelloResponse(mit);
-	    }   
-	 
+	      Serial.println(mit);
+	      Ack(mit);
+	    }   	 
     }
-
 }
 
 
 
-//Receive the Ack of Hello Message
-//Ant has been accepted into the network.
-//Ant must receive list of current members of the network.
-void RACom::HelloRecieve() {
+//Receive the Ack of Hello Message --> Ant has been accepted into the network.
+//Ant receives list of current members of the network.
+void RACom::AckWait() {
 	//If i read the start symbol
       if((char)MySerial.read() == 'A') { //hello answer
 	    int mit; //ack mit
@@ -145,35 +142,36 @@ void RACom::HelloRecieve() {
 		
 	   //Parse message to check if I'm the dest
 	    MySerial.readBytesUntil('$', _buffer, _bufsize);
+	    Serial.println(_bufsize);
 		size_t bufsize = sizeof(_buffer);
 		char copy[bufsize];
         strncpy(copy, _buffer, bufsize);
         copy[bufsize-1] = '\0';
-	     //divide the string into a series of token , suing the delimitator #
-         char * pch = strtok(copy, "#");
-         int i = 0;
+	    char * pch = strtok(copy, "#");
+        int i = 0;
 		 
 		  while (pch != NULL) {
-      // Frame example: mit#dest#n_ant
-
+      // Frame example: mit # dest # n_ants # ant a # ant b ... # ant z $
+      // Frame example: 3#1#3#1#2#3$
+    
         if(i == 0) {
-	    	  //convert pch in int
-         mit = atoi(pch);
-		 Serial.println("MIT OF ACK");
-         Serial.println(mit);
-        }
+	     mit = atoi(pch);
+		}
 
       if(i == 1) {
-		  //put into succ the id of the next node
-        dest = atoi(pch);
-		Serial.println("DEST OF ACK");
-        Serial.println(dest);
-      }
+		dest = atoi(pch);
+	    }
 
       if(i == 2) {
 		 nants = atoi(pch);
-		 Serial.println("NUMBER OF ANTS OF ACK");
-         Serial.println(nants);
+	    }
+	  if(i >= 3 && i <= (ID_LIST_SIZE + 3)) {
+		  int antId; 
+		  antId = atoi(pch);
+		  //If ack is for me
+		  // Add ants from ack to Id list
+		  if(dest == MY_ID){
+		  ID_LIST[antId-1] = antId; }
       }
       pch = strtok (NULL, "#");
       i++;
@@ -181,22 +179,17 @@ void RACom::HelloRecieve() {
 	//If ack is for me
 		if(dest == MY_ID){
 	     Serial.println(F("ACK received: "));
-         //print the message recived
          Serial.print(_buffer);
-		 //Metto i valori ricevuti nelle costanti e svuoto il buffer
-         NUM_ANTS = nants;
-		 //ID_LIST[ID_LIST_SIZE] = atol(_buffer[4]);
-		 //ID_LIST_SIZE++;
-         //_buffer[0] = '\0';
-         memset(_buffer, 0, _bufsize);
-		 flagHello = true; //Stop sending hello messages
+		 NUM_ANTS = nants;
+		 memset(_buffer, 0, _bufsize);
+		flagHello = true; //Stop sending hello messages
 		}  
       }
      
 }
 
 //Send Ack for Hello Message
-void RACom::HelloResponse(int dest) {
+void RACom::Ack(int dest) {
 	Serial.println("Ack Sent: ");
 	MySerial.print('A'); // start char helloanswer
 	Serial.print('A');
@@ -210,6 +203,16 @@ void RACom::HelloResponse(int dest) {
 	Serial.print('#');
 	MySerial.print(NUM_ANTS); // number of ants
 	Serial.print(NUM_ANTS);
+    // list of ants in the network
+     for(int i = 1; i < ID_LIST_SIZE; i++) {
+     if(ID_LIST[i-1] != 0){
+		Serial.print('#');
+		MySerial.print('#');
+	    Serial.print(i);
+		MySerial.print(i); // separator
+     }
+
+  }
 	MySerial.print('$'); // end char
 }
 //This method is used for set the 13s pin as HIGH (5V)

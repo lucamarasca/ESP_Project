@@ -25,6 +25,7 @@ enum
     NUM_NEXT_POS = 8,
     SPECIAL_ANT_ID = 3,
     BUFFER_DIM = 60,
+	 ID_LIST_SIZE = 20,
 	//delay applied to a task
     TASK_DELAY = 10
 };
@@ -49,9 +50,9 @@ public:
 	
 	void Hello();
 	void HelloWait();
-	void HelloRecieve();	
-	void HelloResponse();
-
+	void Ack(int dest);
+	void AckWait();	
+	
 private:
     // methods for comAlgo
     void broadcastPhase();
