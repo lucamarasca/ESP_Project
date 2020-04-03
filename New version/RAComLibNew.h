@@ -19,9 +19,7 @@ enum
     RX = 8,
     TX = 6,
     SET_PIN = 13,
-    RING_ROUND_TRIP_TIMEOUT = 10000 / portTICK_PERIOD_MS, // 10 sec for test
     JOIN_TIMEOUT = 5000 / portTICK_PERIOD_MS, // 5 seconds
-	SPECIAL_TURN_TIMOUT = 3000 / portTICK_PERIOD_MS, //3 seconds 
     REPLY_TIMEOUT = 3000 / portTICK_PERIOD_MS,
     NUM_NEXT_POS = 8,
     SPECIAL_ANT_ID = 3,
@@ -62,13 +60,10 @@ private:
     void BuildTable();
     void startJoinTimer();
     void startReplyTimer();
-    void startSpecialTurnTimer();
     void UpdatePrevSucc();
     static void joinTimerCallback(TimerHandle_t xTimer);
     static void replyTimerCallback(TimerHandle_t xTimer);
-    static void specialTurnTimerCallback(TimerHandle_t xTimer);
 	void Special_Turn();
-
     void Death(int mit);
     int count_underscores(char *s);
 };

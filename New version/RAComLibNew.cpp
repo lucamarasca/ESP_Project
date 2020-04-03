@@ -17,19 +17,13 @@ static byte prev;            //pointer to prev ANT
 static byte expected;    //mit of next expected message
 
 /*Timers*/
-TimerHandle_t xJoinTimer;
-TimerHandle_t xSpecialTurnTimer;
 TimerHandle_t xReplyTimer;
-TimerHandle_t xStabilizationTimer;
 
 /*semaphore*/
 SemaphoreHandle_t xMutex = NULL;
 
 //Condition if a timer expired
-static bool joinTimer_expired;
-static bool special_turnTimer_expired;
 static bool replyTimer_expired;
-static bool readable;
 
 // Array of next positions
 static byte nextPositions[NUM_NEXT_POS] = {225, 225, 225, 225, 225, 225, 225, 225}; // my next pos to brodcast
@@ -65,8 +59,8 @@ void RACom::init(byte id)
 	while (!MySerial)
 		;
 	//print that the serial communication start at the relative BAUD_RATE
-	Serial.print(F("Wireless module serial started at "));
-	Serial.println(BAUD_RATE);
+	//Serial.print(F("Wireless module serial started at "));
+	//Serial.println(BAUD_RATE);
 	pinMode(SET_PIN, OUTPUT);
 	MY_ID = id;
 	_bufsize = sizeof _buffer;   //Set the buffer's size
@@ -83,16 +77,13 @@ void RACom::init(byte id)
 	prev = 100;
 	succ = 100;
 	isMyTurn = false;
-	joinTimer_expired = false;
-	special_turnTimer_expired = false;
 	replyTimer_expired = false;
-	readable = false;
 	startAndStop = 1;
 	antMode = 0;
 	myCurrentPosition = 225;     
 	xSemaphoreTake(xMutex, 0);
    //Ant joins the network
-	//Join(); 
+	Join(); 
 }
 
 void RACom::comAlgo()
@@ -133,7 +124,7 @@ void RACom::Join()
 	bool join = false; //Set to true if I'm not the first ant --> Join network
 
 	// iterate until joinTimer timeout is not expired
-	while (!joinTimer_expired)
+	while (!replyTimer_expired)
 	{      
 		if (MySerial.available())
 		{        
@@ -144,7 +135,7 @@ void RACom::Join()
 				Serial.print(F("<--- Message received: "));
 				Serial.println(_buffer);
 				join = true;    
-				joinTimerCallback(xJoinTimer);        
+				replyTimerCallback(xReplyTimer);        
 			}
 		}
 		memset(_buffer, 0, _bufsize);
@@ -335,29 +326,29 @@ void RACom::ReceiveHello()
 	_buffer[0] = '\0';
 	memset(_buffer, 0, _bufsize);
 	xSemaphoreGive(xMutex);
-	vTaskDelay(50);
+	vTaskDelay(1);
 	while( xSemaphoreTake( xMutex, ( TickType_t ) 10 ) == pdFALSE );
-		int id = 0;
-		size_t bufsize = sizeof(_buffer);
+	int id = 0;
+	size_t bufsize = sizeof(_buffer);
+	if (_buffer[0] != '\0'){
 		char copy[bufsize];
 		strncpy(copy, _buffer, bufsize);
 		copy[bufsize - 1] = '\0';
 		id = atoi(copy);
 		//Serial.println("\nHello received from: " +id);
-
 		//If i received hello message
-		if (id > 0){
-			//Update local table
-			ANT_LIST[id] = true;
-			UpdatePrevSucc();	
-		}		
-}
+		//Update local table
+		ANT_LIST[id] = true;
+		UpdatePrevSucc();				
+	}
+			
+	}
 
   //Broadcast message addressed to my succ
 void RACom::Send(){
 	MySerial.flush();
 	Serial.flush();
-	vTaskDelay(50);
+	vTaskDelay(1);
 
 	Serial.print(F("<--- Message Sent: "));
 
@@ -415,23 +406,24 @@ void RACom::Send(){
 
 void RACom::readBuffer(){
   	if ( xSemaphoreTake( xMutex, ( TickType_t ) 10 ) == pdTRUE ){
-	Serial.print("\nRead buffer");
-	startReplyTimer(); //I listen for 2 seconds.
-	while(!replyTimer_expired){
-		if (MySerial.available())
-		{
-			char firstChar = (char)MySerial.read();
-			if (firstChar == 'H' || firstChar == '@' )
+		startReplyTimer(); //I listen for 2 seconds.
+		while(!replyTimer_expired){
+			if (MySerial.available())
 			{
-				MySerial.readBytesUntil('$', _buffer, _bufsize);
-				//Serial.println("\nMessage received:");
-				Serial.println(_buffer);  			
-				replyTimerCallback(xReplyTimer);
-			}			
+				char firstChar = (char)MySerial.read();
+				if (firstChar == 'H' || firstChar == '@' )
+				{
+					MySerial.readBytesUntil('$', _buffer, _bufsize);
+					//Serial.print(F("<--- Message received: "));
+					Serial.println(_buffer);  					
+					replyTimerCallback(xReplyTimer);
+					Serial.flush();
+					MySerial.flush();	
+				}			
+			}
 		}
-	}
-	 xSemaphoreGive( xMutex );
-	 vTaskDelay(100);
+		xSemaphoreGive( xMutex );
+		vTaskDelay(1);
 	}
 }
 
@@ -448,11 +440,11 @@ void RACom::readBuffer(){
 	int ss;  
 	
  	xSemaphoreGive( xMutex); 
-	 vTaskDelay(100);
+	 vTaskDelay(1);
 	 while( xSemaphoreTake( xMutex, ( TickType_t ) 10 ) == pdFALSE );
 		//If I don't read all the separators, the ant died while sending the message
-		int separator = count_underscores(_buffer);
-		if( separator == 12 )
+	int separator = count_underscores(_buffer);
+	if( separator == 12 )
 		{
 			alive = true;
 			//Serial.print(_buffer);  
@@ -521,7 +513,7 @@ void RACom::readBuffer(){
 				pch = strtok(NULL, "#");
 				i++;
 			}
-		}	
+	}	
 		//If alive flag is set to false, no message was received and the expected ant is dead
 		if (!alive)
 		{
@@ -582,7 +574,6 @@ void RACom::Death(int mit){
 
 // Starts the special turn
 void RACom::Special_Turn(){
-
  	ReceiveHello();
 	//Establish who is the first ant to speak after special turn
 	if (prev == 100) 
@@ -684,8 +675,6 @@ void RACom::setupMutex()
 	 	Serial.println(F("Failure creating mutex"));
 			for (;;)
 				;
-		}else {
-			Serial.println("Mutex created successfully.");
 		}
 }
 
@@ -693,14 +682,6 @@ void RACom::setupTimers()
 {
 	Serial.println("Setup timers");
 
-	
-	xSpecialTurnTimer = xTimerCreate(
-		"Special_Timer",     /* A text name, purely to help debugging. */
-		(SPECIAL_TURN_TIMOUT),   /* The timer period. */
-		pdFALSE,              /* This is an auto-reload timer, so xAutoReload is set to pdTRUE. */
-		(void *)0,            /* The ID is not used, so can be set to anything. */
-		specialTurnTimerCallback /* The callback function that inspects the status of all the other tasks. */
-		);
 	xReplyTimer = xTimerCreate(
 		"Reply_Timer",     /* A text name, purely to help debugging. */
 		(REPLY_TIMEOUT),   /* The timer period. */
@@ -709,14 +690,11 @@ void RACom::setupTimers()
 		replyTimerCallback /* The callback function that inspects the status of all the other tasks. */
 		);
 	
-
-	if (xSpecialTurnTimer == NULL || xReplyTimer == NULL)
+	if (xReplyTimer == NULL)
 	{
 		Serial.println(F("failure creating Timers"));
 		for (;;)
 			;
-	}else{
-			Serial.println("Timers created successfully.");
 	}
 }
 
@@ -724,52 +702,24 @@ void RACom::setupTimers()
 void RACom::startJoinTimer()
 {
 	Serial.print('\n');
-	Serial.println(F("J. timer started"));
-	joinTimer_expired = false;
-	xTimerStart(xJoinTimer, 0);
-}
-
-//Starts the timer to check if an ant is dead
-void RACom::startSpecialTurnTimer()
-{
-	Serial.print('\n');
-	Serial.println(F("Special timer started"));
-	special_turnTimer_expired = false;
-	xTimerStart(xSpecialTurnTimer, 0);
+	Serial.println(F("Join timer started"));
+	replyTimer_expired = false;
+	xTimerChangePeriod( xReplyTimer, JOIN_TIMEOUT, 0 );
 }
 
 //Starts the timer to check if an ant is dead
 void RACom::startReplyTimer()
 {
-	Serial.print('\n');
-	//Serial.println(F("Reply timer started"));
+	Serial.println(F("\nReply timer started"));
 	replyTimer_expired = false;
-	xTimerStart(xReplyTimer, 0);
+	xTimerChangePeriod( xReplyTimer, REPLY_TIMEOUT, 0 );
 }
 
-
-//when we have a callback to the join timer it means that it has expired
-void RACom::joinTimerCallback(TimerHandle_t xTimer)
-{
-	Serial.print('\n');
-	Serial.println(F("Join Timer Expired"));
-	joinTimer_expired = true;	
-	xTimerStopFromISR(xJoinTimer, 0);
-
-}
-//when we have a callback to the join timer it means that it has expired
-void RACom::specialTurnTimerCallback(TimerHandle_t xTimer)
-{
-	Serial.print('\n');
-	Serial.println(F("Special Timer Expired"));
-	special_turnTimer_expired = true;
-	xTimerStopFromISR(xSpecialTurnTimer, 0);
-}
-//when we have a callback to the join timer it means that it has expired
+//when we have a callback to thetimer it means that it has expired
 void RACom::replyTimerCallback(TimerHandle_t xTimer)
 {
-	Serial.print('\n');
-	Serial.println(F("Reply Timer Expired"));
+	Serial.println(F("\nTimer Expired"));
 	replyTimer_expired = true;
 	xTimerStopFromISR(xReplyTimer, 0);
 }
+
