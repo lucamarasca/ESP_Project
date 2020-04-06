@@ -41,6 +41,8 @@ TaskHandle_t *taskBuffer;
 TaskHandle_t *taskComm;
 TaskHandle_t *taskRGB;
 TaskHandle_t *taskMotion;
+static bool initPhase; //set to true only during initial join phase
+static bool noTimer;
 static bool isMyTurn; //Says if it's my turn to send the message
 
 static byte startAndStop;      // 0 = stop, 1 = start
@@ -63,6 +65,7 @@ void RACom::init(byte id)
 	//Serial.println(BAUD_RATE);
 	pinMode(SET_PIN, OUTPUT);
 	MY_ID = id;
+	_buffer[0] = '\0';
 	_bufsize = sizeof _buffer;   //Set the buffer's size
 	// initialize the buffer adding 0 in all the positions
 	memset(_buffer, 0, _bufsize);
@@ -81,9 +84,10 @@ void RACom::init(byte id)
 	startAndStop = 1;
 	antMode = 0;
 	myCurrentPosition = 225;     
+	initPhase = true;
+	noTimer = false;
 	xSemaphoreTake(xMutex, 0);
-   //Ant joins the network
-	Join(); 
+ 	Join(); 
 }
 
 void RACom::comAlgo()
@@ -120,84 +124,64 @@ void RACom::Join()
 {
 	Serial.print(MY_ID);
 	Serial.print(" <-- tries to join the network");
-	startJoinTimer();
-	bool join = false; //Set to true if I'm not the first ant --> Join network
-
-	// iterate until joinTimer timeout is not expired
-	while (!replyTimer_expired)
-	{      
-		if (MySerial.available())
-		{        
-			//Check if I'm the only ant in the network
-			if ((char)MySerial.read() == '@')  
-			{
-				MySerial.readBytesUntil('$', _buffer, _bufsize);
-				Serial.print(F("<--- Message received: "));
-				Serial.println(_buffer);
-				join = true;    
-				replyTimerCallback(xReplyTimer);        
-			}
-		}
-		memset(_buffer, 0, _bufsize);
-
-	}
-	//Ant builds table and sends hello to join the network
-	if(join)
+		
+	xSemaphoreGive( xMutex); //check for incoming messages from the network
+	vTaskDelay(2);
+ 	while( xSemaphoreTake( xMutex, ( TickType_t ) 10 ) == pdFALSE );
+	initPhase = false;
+	noTimer = true;
+	//If ant is not alone, it needs to build its table and send hello to join the network
+	if(_buffer[0] != '\0') //if buffer is not empty i received a message
 	{
 		bool isSpecialTurn = false;
-
-		//Wait until special turn
+		Serial.print("\nWaiting for first special turn");
 		while (!isSpecialTurn)
 		{
-			if (MySerial.available())  
-			{
-				if ((char)MySerial.read() == '@')  
-				{
-					MySerial.readBytesUntil('$', _buffer, _bufsize);
-					int mit;  
-					int dest;
-					size_t bufsize = sizeof(_buffer);
-					char copy[bufsize];
-					strncpy(copy, _buffer, bufsize);
-					copy[bufsize-1] = '\0';
-					char * pch = strtok(copy, "#");
-					int i = 0;
+			xSemaphoreGive( xMutex); 
+	 		vTaskDelay(1);
+	 		while( xSemaphoreTake( xMutex, ( TickType_t ) 10 ) == pdFALSE );				
+			
+				int mit;  
+				int dest;
+				size_t bufsize = sizeof(_buffer);
+				char copy[bufsize];
+				strncpy(copy, _buffer, bufsize);
+				copy[bufsize-1] = '\0';
+				char * pch = strtok(copy, "#");
+				int i = 0;
 
-					while (pch != NULL) 
+				while (pch != NULL) 
+				{
+					if (i == 0)
 					{
-						if (i == 0)
-						{
-							mit = atoi(pch);
-						}
-						if(i == 1) 
-						{ 
-							dest = atoi(pch);
-						}
-						if(i > 1) 
-						{
-							pch = NULL; 
-						}
-						else 
-						{
-							pch = strtok(NULL, "#");
-						}
-						i++;
+						mit = atoi(pch);
 					}
-					
-					Serial.print("\nWaiting for first special turn");
-					_buffer[0] = '\0';
-					memset(_buffer, 0, _bufsize);
-					//If dest is special turn
-					if(dest == 100){
-						isSpecialTurn = true;
-					}            
-				}
-			}
+					if(i == 1) 
+					{ 
+						dest = atoi(pch);
+					}
+					if(i > 1) 
+					{
+						pch = NULL; 
+					}
+					else 
+					{
+						pch = strtok(NULL, "#");
+					}
+					i++;
+				}				
+				
+				_buffer[0] = '\0';
+				memset(_buffer, 0, _bufsize);
+				//If dest is special turn
+				if(dest == 100){
+					isSpecialTurn = true;
+				}          
+							
 		}
 		BuildTable();
 		UpdatePrevSucc();
-		Hello();
-
+		Hello();		
 		//Establish who is the first ant to speak after join
 		if (prev == 100) 
 		{
@@ -205,6 +189,7 @@ void RACom::Join()
 			isMyTurn = true;
 		}
 	}
+	noTimer = false; //add timer during read
 }
 
 //Build ant table
@@ -350,7 +335,7 @@ void RACom::Send(){
 	Serial.flush();
 	vTaskDelay(1);
 
-	Serial.print(F("<--- Message Sent: "));
+	Serial.print(F("\n<--- Message Sent: "));
 
 	// Wireless send
 	MySerial.print('@'); // start char
@@ -406,22 +391,38 @@ void RACom::Send(){
 
 void RACom::readBuffer(){
   	if ( xSemaphoreTake( xMutex, ( TickType_t ) 10 ) == pdTRUE ){
-		startReplyTimer(); //I listen for 2 seconds.
-		while(!replyTimer_expired){
+		if(noTimer){
 			if (MySerial.available())
 			{
 				char firstChar = (char)MySerial.read();
-				if (firstChar == 'H' || firstChar == '@' )
+				if (firstChar == '@' )
 				{
 					MySerial.readBytesUntil('$', _buffer, _bufsize);
-					//Serial.print(F("<--- Message received: "));
-					Serial.println(_buffer);  					
-					replyTimerCallback(xReplyTimer);
+					Serial.println(_buffer);				
 					Serial.flush();
 					MySerial.flush();	
 				}			
 			}
-		}
+				
+	}else{
+				startTimer(); //I listen for 2 seconds.
+				while(!replyTimer_expired){
+					if (MySerial.available())
+					{
+						char firstChar = (char)MySerial.read();
+						if (firstChar == 'H' || firstChar == '@' )
+						{
+							MySerial.readBytesUntil('$', _buffer, _bufsize);
+							//Serial.print(F("<--- Message received: "));
+							Serial.println(_buffer);  
+							replyTimerCallback(xReplyTimer);
+							Serial.flush();
+							MySerial.flush();	
+						}			
+					}
+				}
+		}			
+		
 		xSemaphoreGive( xMutex );
 		vTaskDelay(1);
 	}
@@ -695,6 +696,21 @@ void RACom::setupTimers()
 		Serial.println(F("failure creating Timers"));
 		for (;;)
 			;
+	}
+}
+
+  //Starts the timer for adding a new ant to the network
+void RACom::startTimer()
+{
+	if(initPhase){
+		Serial.print('\n');
+		Serial.println(F("Join timer started"));
+		replyTimer_expired = false;
+		xTimerChangePeriod( xReplyTimer, JOIN_TIMEOUT, 0 );
+	}else{
+		Serial.println(F("\nReply timer started"));
+		replyTimer_expired = false;
+		xTimerChangePeriod( xReplyTimer, REPLY_TIMEOUT, 0 );
 	}
 }
 

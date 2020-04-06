@@ -60,6 +60,7 @@ private:
     void BuildTable();
     void startJoinTimer();
     void startReplyTimer();
+    void startTimer();
     void UpdatePrevSucc();
     static void joinTimerCallback(TimerHandle_t xTimer);
     static void replyTimerCallback(TimerHandle_t xTimer);
